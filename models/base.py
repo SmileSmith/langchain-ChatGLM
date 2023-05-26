@@ -181,8 +181,9 @@ class BaseAnswer(ABC):
         在Hugging Face Transformer模型中，eos_token_id是由tokenizer自动添加到输入中的。
         在模型生成输出时，如果模型生成了eos_token_id，则生成过程将停止并返回生成的序列。
         """
-        eos_token_ids = [
-            self._check_point.tokenizer.eos_token_id] if self._check_point.tokenizer.eos_token_id is not None else []
+        if (self._check_point and self._check_point.tokenizer):
+            eos_token_ids = [
+                self._check_point.tokenizer.eos_token_id] if self._check_point.tokenizer.eos_token_id is not None else []
 
         with generate_with_streaming(prompt=prompt, history=history, streaming=streaming) as generator:
             for answerResult in generator:

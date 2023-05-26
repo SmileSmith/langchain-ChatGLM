@@ -121,9 +121,9 @@ def init_model(llm_model: BaseAnswer = None):
         return reply
 
 
-def reinit_model(llm_model, embedding_model, llm_history_len, no_remote_model, use_ptuning_v2, use_lora, top_k, history):
+def reinit_model(llm_model, embedding_model, llm_history_len, top_k, history):
     try:
-        llm_model_ins = shared.loaderLLM(llm_model, no_remote_model, use_ptuning_v2)
+        llm_model_ins = shared.loaderLLM(llm_model, no_remote_model=False, use_ptuning_v2=False)
         llm_model_ins.history_len = llm_history_len
         local_doc_qa.init_cfg(llm_model=llm_model_ins,
                               embedding_model=embedding_model,
@@ -231,17 +231,16 @@ block_css = """.importantButton {
 }"""
 
 webui_title = """
-# 🎉langchain-ChatGLM WebUI🎉
-👍 [https://github.com/imClumsyPanda/langchain-ChatGLM](https://github.com/imClumsyPanda/langchain-ChatGLM)
+# 🎉langchain WebUI🎉
 """
 default_vs = vs_list[0] if len(vs_list) > 1 else "为空"
-init_message = f"""欢迎使用 langchain-ChatGLM Web UI！
+init_message = f"""欢迎使用 langchain WebUI！
 
 请在右侧切换模式，目前支持直接与 LLM 模型对话或基于本地知识库问答。
 
 知识库问答模式，选择知识库名称后，即可开始问答，当前知识库{default_vs}，如有需要可以在选择知识库名称后上传文件/文件夹至知识库。
 
-知识库暂不支持文件删除，该功能将在后续版本中推出。
+知识库暂不支持文件删除，请谨慎使用
 """
 
 # 初始化消息
@@ -434,21 +433,13 @@ with gr.Blocks(css=block_css, theme=gr.themes.Default(**default_theme_args)) as 
                              label="LLM 模型",
                              value=LLM_MODEL,
                              interactive=True)
-        no_remote_model = gr.Checkbox(shared.LoaderCheckPoint.no_remote_model,
-                                      label="加载本地模型",
-                                      interactive=True)
 
         llm_history_len = gr.Slider(0, 10,
                                     value=LLM_HISTORY_LEN,
                                     step=1,
                                     label="LLM 对话轮数",
                                     interactive=True)
-        use_ptuning_v2 = gr.Checkbox(USE_PTUNING_V2,
-                                     label="使用p-tuning-v2微调过的模型",
-                                     interactive=True)
-        use_lora = gr.Checkbox(USE_LORA,
-                               label="使用lora微调的权重",
-                               interactive=True)
+
         embedding_model = gr.Radio(embedding_model_dict_list,
                                    label="Embedding 模型",
                                    value=EMBEDDING_MODEL,
@@ -457,13 +448,12 @@ with gr.Blocks(css=block_css, theme=gr.themes.Default(**default_theme_args)) as 
                           label="向量匹配 top k", interactive=True)
         load_model_button = gr.Button("重新加载模型")
         load_model_button.click(reinit_model, show_progress=True,
-                                inputs=[llm_model, embedding_model, llm_history_len, no_remote_model, use_ptuning_v2, use_lora,
-                                        top_k, chatbot], outputs=chatbot)
+                                inputs=[llm_model, embedding_model, llm_history_len, top_k, chatbot], outputs=chatbot)
 
 (demo
  .queue(concurrency_count=3)
  .launch(server_name='0.0.0.0',
-         server_port=7860,
+         server_port=7866,
          show_api=False,
-         share=False,
+         share=True,
          inbrowser=False))

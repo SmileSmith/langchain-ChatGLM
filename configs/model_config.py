@@ -26,47 +26,22 @@ EMBEDDING_DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backe
 # supported LLM models
 # llm_model_dict 处理了loader的一些预设行为，如加载位置，模型名称，模型处理器实例
 llm_model_dict = {
-    "chatglm-6b-int4-qe": {
-        "name": "chatglm-6b-int4-qe",
-        "pretrained_model_name": "THUDM/chatglm-6b-int4-qe",
+    # "chatglm-6b": {
+    #     "name": "chatglm-6b",
+    #     "pretrained_model_name": "THUDM/chatglm-6b",
+    #     "local_model_path": None,
+    #     "provides": "ChatGLM"
+    # },
+    "chatgpt": {
+        "name": "chatgpt",
+        "pretrained_model_name": "",
         "local_model_path": None,
-        "provides": "ChatGLM"
+        "provides": "CHATGPTLLM"
     },
-    "chatglm-6b-int4": {
-        "name": "chatglm-6b-int4",
-        "pretrained_model_name": "THUDM/chatglm-6b-int4",
-        "local_model_path": None,
-        "provides": "ChatGLM"
-    },
-    "chatglm-6b-int8": {
-        "name": "chatglm-6b-int8",
-        "pretrained_model_name": "THUDM/chatglm-6b-int8",
-        "local_model_path": None,
-        "provides": "ChatGLM"
-    },
-    "chatglm-6b": {
-        "name": "chatglm-6b",
-        "pretrained_model_name": "THUDM/chatglm-6b",
-        "local_model_path": None,
-        "provides": "ChatGLM"
-    },
-
-    "chatyuan": {
-        "name": "chatyuan",
-        "pretrained_model_name": "ClueAI/ChatYuan-large-v2",
-        "local_model_path": None,
-        "provides": None
-    },
-    "moss": {
-        "name": "moss",
-        "pretrained_model_name": "fnlp/moss-moon-003-sft",
-        "local_model_path": None,
-        "provides": "MOSSLLM"
-    }
 }
 
 # LLM 名称
-LLM_MODEL = "chatglm-6b"
+LLM_MODEL = "chatgpt"
 # 如果你需要加载本地的model，指定这个参数  ` --no-remote-model`，或者下方参数修改为 `True`
 NO_REMOTE_MODEL = False
 # 量化加载8bit 模型
