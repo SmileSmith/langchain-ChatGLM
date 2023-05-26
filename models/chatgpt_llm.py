@@ -10,8 +10,7 @@ from models.loader import LoaderCheckPoint
 from models.base import (BaseAnswer,
                          AnswerResult,
                          AnswerResultStream)
-
-openai_api_key = "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"
+from configs.model_config import OPENAI_API_KEY
 
 template="""AI是一个前端开发工程师：
 {history}
@@ -82,16 +81,16 @@ class CHATGPTLLM(BaseAnswer, LLM, ABC):
                          history: List[List[str]] = [],
                          streaming: bool = False,
                          generate_with_callback: AnswerResultStream = None) -> None:
-        print(history)
+
         history += [[]]
         if (self.llmChain is None):
             self.llmChain = LLMChain(
-                llm=ChatOpenAI(temperature=self.temperature, openai_api_key=openai_api_key, streaming=streaming, verbose=True),
+                llm=ChatOpenAI(temperature=self.temperature, openai_api_key=OPENAI_API_KEY, streaming=streaming, verbose=True),
                 prompt=promptTemp,
                 verbose=True,
                 memory=ConversationBufferWindowMemory(k=2),
             )
-        self.llmChain.llm = ChatOpenAI(temperature=self.temperature, openai_api_key=openai_api_key, streaming=streaming, verbose=True, callback_manager=CallbackManager([StreamingCallbackHandler(prompt, history, generate_with_callback)]))
+        self.llmChain.llm = ChatOpenAI(temperature=self.temperature, openai_api_key=OPENAI_API_KEY, streaming=streaming, verbose=True, callback_manager=CallbackManager([StreamingCallbackHandler(prompt, history, generate_with_callback)]))
         result = self.llmChain.predict(human_input=prompt, history=history)
         print("result")
         print(result)
