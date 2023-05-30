@@ -119,3 +119,6 @@ BING_SUBSCRIPTION_KEY = os.environ["BING_SUBSCRIPTION_KEY"]
 
 # ChatGPT相关变量
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+
+# ChatGPT相关变量
+OPENAI_API_BASE = os.environ["OPENAI_API_BASE"]
