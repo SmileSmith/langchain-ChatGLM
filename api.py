@@ -219,7 +219,7 @@ async def delete_docs(
         return BaseResponse(code=200, msg=f"Knowledge Base {knowledge_base_id} delete success")
 
 async def add_one_doc(
-        knowledge_base_id: str = Form(..., description="Knowledge Base Name", example="kb1"),
+        knowledge_base_id: str = Form(..., description="Knowledge Base Name（该方法加入的知识，暂不支持删除）", example="kb1"),
         one_doc_title: str = Form(..., description="One Doc Title", example="hibox最新版本"),
         one_doc_content: str = Form(..., description="One Doc Content", example="hibox的最新版本是2.6.2"),
         chunk_size: Optional[int] = Body(2000, description="Vector Store Chunk Size", example="2000"),
