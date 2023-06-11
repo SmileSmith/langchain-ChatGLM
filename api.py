@@ -17,7 +17,7 @@ from starlette.responses import RedirectResponse
 from chains.local_doc_qa import LocalDocQA
 from configs.model_config import (VS_ROOT_PATH, UPLOAD_ROOT_PATH, EMBEDDING_DEVICE,
                                   EMBEDDING_MODEL, NLTK_DATA_PATH,
-                                  VECTOR_SEARCH_TOP_K, LLM_HISTORY_LEN, OPEN_CROSS_DOMAIN)
+                                  VECTOR_SEARCH_TOP_K, OPEN_CROSS_DOMAIN)
 import models.shared as shared
 from models.loader.args import parser
 from models.loader import LoaderCheckPoint
@@ -37,6 +37,18 @@ class BaseResponse(BaseModel):
             }
         }
 
+class ListKnowledgesResponse(BaseResponse):
+    data: List[str] = pydantic.Field(..., description="List of knowledge ids")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "code": 200,
+                "msg": "success",
+                "data": ["hibox问答助手", "前端组件库"],
+            }
+        }
+
 
 class ListDocsResponse(BaseResponse):
     data: List[str] = pydantic.Field(..., description="List of document names")
@@ -50,30 +62,31 @@ class ListDocsResponse(BaseResponse):
             }
         }
 
+class SourceDocument(BaseModel):
+    score: int
+    source: str
+    page_number: int
+    content: str
 
-class ChatMessage(BaseModel):
+
+class ChatMessage(BaseResponse):
     question: str = pydantic.Field(..., description="Question text")
     response: str = pydantic.Field(..., description="Response text")
-    history: List[List[str]] = pydantic.Field(..., description="History text")
-    source_documents: List[str] = pydantic.Field(
+    source_documents: List[SourceDocument] = pydantic.Field(
         ..., description="List of source documents and their scores"
     )
 
     class Config:
         schema_extra = {
             "example": {
+                "code": 200,
+                "msg": "success",
                 "question": "工伤保险如何办理？",
-                "response": "根据已知信息，可以总结如下：\n\n1. 参保单位为员工缴纳工伤保险费，以保障员工在发生工伤时能够获得相应的待遇。\n2. 不同地区的工伤保险缴费规定可能有所不同，需要向当地社保部门咨询以了解具体的缴费标准和规定。\n3. 工伤从业人员及其近亲属需要申请工伤认定，确认享受的待遇资格，并按时缴纳工伤保险费。\n4. 工伤保险待遇包括工伤医疗、康复、辅助器具配置费用、伤残待遇、工亡待遇、一次性工亡补助金等。\n5. 工伤保险待遇领取资格认证包括长期待遇领取人员认证和一次性待遇领取人员认证。\n6. 工伤保险基金支付的待遇项目包括工伤医疗待遇、康复待遇、辅助器具配置费用、一次性工亡补助金、丧葬补助金等。",
-                "history": [
-                    [
-                        "工伤保险是什么？",
-                        "工伤保险是指用人单位按照国家规定，为本单位的职工和用人单位的其他人员，缴纳工伤保险费，由保险机构按照国家规定的标准，给予工伤保险待遇的社会保险制度。",
-                    ]
-                ],
+                "response": "参保单位为员工缴纳工伤保险费。",
                 "source_documents": [
-                    "出处 [1] 广州市单位从业的特定人员参加工伤保险办事指引.docx：\n\n\t( 一)  从业单位  (组织)  按“自愿参保”原则，  为未建 立劳动关系的特定从业人员单项参加工伤保险 、缴纳工伤保 险费。",
-                    "出处 [2] ...",
-                    "出处 [3] ...",
+                    {"source": "doc1.docx", "content": "广州市单位从业的特定人员参加工伤保险办事指引.docx：\n\n\t( 一)  从业单位  (组织)  按“自愿参保”原则，  为未建 立劳动关系的特定从业人员单项参加工伤保险 、缴纳工伤保 险费。.", "page_num": 1, "score": 321 },
+                    {"source": "doc2.pdf", "content": "doc2 content...", "page_num": 1, "score": 397 },
+                    {"source": "doc3.txt", "content": "doc3 content...", "page_num": 1, "score": 476 },
                 ],
             }
         }
@@ -90,8 +103,18 @@ def get_vs_path(local_doc_id: str):
 def get_file_path(local_doc_id: str, doc_name: str):
     return os.path.join(UPLOAD_ROOT_PATH, local_doc_id, doc_name)
 
+def list_knowledges():
+    all_knowledge_ids = []
+    if not os.path.exists(VS_ROOT_PATH):
+        return ListKnowledgesResponse(data=all_knowledge_ids)
+    all_knowledge_ids = os.listdir(VS_ROOT_PATH)
+    if not all_knowledge_ids:
+        return ListKnowledgesResponse(data=all_knowledge_ids)
+    all_knowledge_ids.sort()
+    return ListKnowledgesResponse(data=all_knowledge_ids)
 
-async def upload_file(
+
+async def upload_doc(
         file: UploadFile = File(description="A single binary file"),
         knowledge_base_id: str = Form(..., description="Knowledge Base Name", example="kb1"),
 ):
@@ -119,7 +142,7 @@ async def upload_file(
         return BaseResponse(code=500, msg=file_status)
 
 
-async def upload_files(
+async def upload_docs(
         files: Annotated[
             List[UploadFile], File(description="Multiple files as UploadFile")
         ],
@@ -153,7 +176,7 @@ async def list_docs(
     if knowledge_base_id:
         local_doc_folder = get_folder_path(knowledge_base_id)
         if not os.path.exists(local_doc_folder):
-            return {"code": 1, "msg": f"Knowledge base {knowledge_base_id} not found"}
+            return ListDocsResponse(code=1, msg=f"Knowledge base {knowledge_base_id} not found", data=[])
         all_doc_names = [
             doc
             for doc in os.listdir(local_doc_folder)
@@ -175,7 +198,7 @@ async def list_docs(
 
 async def delete_docs(
         knowledge_base_id: str = Query(...,
-                                       description="Knowledge Base Name(注意此方法仅删除上传的文件并不会删除知识库(FAISS)内数据)",
+                                       description="Knowledge Base Name(注意此方法仅删除上传的文件并不会删除知识库)",
                                        example="kb1"),
         doc_name: Optional[str] = Query(
             None, description="doc name", example="doc_name_1.pdf"
@@ -191,124 +214,80 @@ async def delete_docs(
             return BaseResponse(code=200, msg=f"document {doc_name} delete success")
         else:
             return BaseResponse(code=1, msg=f"document {doc_name} not found")
-
-        remain_docs = await list_docs(knowledge_base_id)
-        remain_docs = remain_docs.json()
-        if len(remain_docs["data"]) == 0:
-            shutil.rmtree(get_folder_path(knowledge_base_id), ignore_errors=True)
-        else:
-            local_doc_qa.init_knowledge_vector_store(
-                get_folder_path(knowledge_base_id), get_vs_path(knowledge_base_id)
-            )
     else:
         shutil.rmtree(get_folder_path(knowledge_base_id))
         return BaseResponse(code=200, msg=f"Knowledge Base {knowledge_base_id} delete success")
 
+async def add_one_doc(
+        knowledge_base_id: str = Form(..., description="Knowledge Base Name", example="kb1"),
+        one_doc_title: str = Form(..., description="One Doc Title", example="hibox最新版本"),
+        one_doc_content: str = Form(..., description="One Doc Content", example="hibox的最新版本是2.6.2"),
+        chunk_size: Optional[int] = Body(2000, description="Vector Store Chunk Size", example="2000"),
+        chunk_conent: Optional[bool] = Body(False, description="Vector Store Chunk Conent", example="false"),
 
-async def local_doc_chat(
+):
+    vs_path = os.path.join(VS_ROOT_PATH, knowledge_base_id)
+    if not os.path.exists(vs_path):
+        # return BaseResponse(code=1, msg=f"Knowledge base {knowledge_base_id} not found")
+        return BaseResponse(
+            code=404,
+            msg=f"Knowledge base {knowledge_base_id} not found",
+        )
+    else:
+        vs_path, loaded_files = local_doc_qa.one_knowledge_add(vs_path, one_doc_title, one_doc_content, chunk_conent, chunk_size)
+
+        if len(loaded_files):
+            file_status = f"已添加 {one_doc_title} 至知识库 {knowledge_base_id}"
+            return BaseResponse(code=200, msg=file_status)
+        else:
+            file_status = "文档入库失败，请联系管理员"
+            return BaseResponse(code=500, msg=file_status)
+
+
+async def search_doc(
         knowledge_base_id: str = Body(..., description="Knowledge Base Name", example="kb1"),
         question: str = Body(..., description="Question", example="工伤保险是什么？"),
-        history: List[List[str]] = Body(
-            [],
-            description="History of previous questions and answers",
-            example=[
-                [
-                    "工伤保险是什么？",
-                    "工伤保险是指用人单位按照国家规定，为本单位的职工和用人单位的其他人员，缴纳工伤保险费，由保险机构按照国家规定的标准，给予工伤保险待遇的社会保险制度。",
-                ]
-            ],
-        ),
+        score_threshold: Optional[int] = Body(700, description="Score Threshold", example="500"),
+        top_k: Optional[int] = Body(5, description="Vector Search top_k", example="3"),
+        chunk_size: Optional[int] = Body(500, description="Vector Search Chunk Size", example="2000"),
+        chunk_conent: Optional[bool] = Body(True, description="Vector Search Chunk Conent", example="true"),
 ):
     vs_path = os.path.join(VS_ROOT_PATH, knowledge_base_id)
     if not os.path.exists(vs_path):
         # return BaseResponse(code=1, msg=f"Knowledge base {knowledge_base_id} not found")
         return ChatMessage(
+            code=404,
+            msg=f"Knowledge base {knowledge_base_id} not found",
             question=question,
-            response=f"Knowledge base {knowledge_base_id} not found",
-            history=history,
+            response="",
             source_documents=[],
         )
     else:
-        for resp, history in local_doc_qa.get_knowledge_based_answer(
-                query=question, vs_path=vs_path, chat_history=history, streaming=True
-        ):
-            pass
+        resp, _ = local_doc_qa.get_knowledge_based_conent_test(
+                query=question, vs_path=vs_path, score_threshold=score_threshold, vector_search_top_k=top_k, chunk_size=chunk_size, chunk_conent=chunk_conent
+        )
         source_documents = [
-            f"""出处 [{inum + 1}] {os.path.split(doc.metadata['source'])[-1]}：\n\n{doc.page_content}\n\n"""
-            f"""相关度：{doc.metadata['score']}\n\n"""
-            for inum, doc in enumerate(resp["source_documents"])
+            SourceDocument(source=os.path.split(doc.metadata.get("source", "unknown"))[-1], content=doc.page_content, score=doc.metadata['score'], page_number=doc.metadata.get("page_number", 1))
+            for _, doc in enumerate(resp["source_documents"])
         ]
+        # 按score从小到大排序
+        source_documents.sort(key=lambda x: x.score)
 
         return ChatMessage(
+            msg="success",
             question=question,
-            response=resp["result"],
-            history=history,
+            response="",
             source_documents=source_documents,
         )
 
 
-async def bing_search_chat(
-        question: str = Body(..., description="Question", example="工伤保险是什么？"),
-        history: Optional[List[List[str]]] = Body(
-            [],
-            description="History of previous questions and answers",
-            example=[
-                [
-                    "工伤保险是什么？",
-                    "工伤保险是指用人单位按照国家规定，为本单位的职工和用人单位的其他人员，缴纳工伤保险费，由保险机构按照国家规定的标准，给予工伤保险待遇的社会保险制度。",
-                ]
-            ],
-        ),
-):
-    for resp, history in local_doc_qa.get_search_result_based_answer(
-            query=question, chat_history=history, streaming=True
-    ):
-        pass
-    source_documents = [
-        f"""出处 [{inum + 1}] [{doc.metadata["source"]}]({doc.metadata["source"]}) \n\n{doc.page_content}\n\n"""
-        for inum, doc in enumerate(resp["source_documents"])
-    ]
 
-    return ChatMessage(
-        question=question,
-        response=resp["result"],
-        history=history,
-        source_documents=source_documents,
-    )
-
-async def chat(
-        question: str = Body(..., description="Question", example="工伤保险是什么？"),
-        history: List[List[str]] = Body(
-            [],
-            description="History of previous questions and answers",
-            example=[
-                [
-                    "工伤保险是什么？",
-                    "工伤保险是指用人单位按照国家规定，为本单位的职工和用人单位的其他人员，缴纳工伤保险费，由保险机构按照国家规定的标准，给予工伤保险待遇的社会保险制度。",
-                ]
-            ],
-        ),
-):
-    for answer_result in local_doc_qa.llm.generatorAnswer(prompt=question, history=history,
-                                                          streaming=True):
-        resp = answer_result.llm_output["answer"]
-        history = answer_result.history
-        pass
-
-    return ChatMessage(
-        question=question,
-        response=resp,
-        history=history,
-        source_documents=[],
-    )
-
-
-async def stream_chat(websocket: WebSocket, knowledge_base_id: str):
+async def stream_local_doc_chat(websocket: WebSocket, knowledge_base_id: str):
     await websocket.accept()
     turn = 1
     while True:
         input_json = await websocket.receive_json()
-        question, history, knowledge_base_id = input_json[""], input_json["history"], input_json["knowledge_base_id"]
+        question, knowledge_base_id = input_json[""], input_json["knowledge_base_id"]
         vs_path = os.path.join(VS_ROOT_PATH, knowledge_base_id)
 
         if not os.path.exists(vs_path):
@@ -319,8 +298,8 @@ async def stream_chat(websocket: WebSocket, knowledge_base_id: str):
         await websocket.send_json({"question": question, "turn": turn, "flag": "start"})
 
         last_print_len = 0
-        for resp, history in local_doc_qa.get_knowledge_based_answer(
-                query=question, vs_path=vs_path, chat_history=history, streaming=True
+        for resp in local_doc_qa.get_knowledge_based_answer(
+                query=question, vs_path=vs_path, streaming=True
         ):
             await websocket.send_text(resp["result"][last_print_len:])
             last_print_len = len(resp["result"])
@@ -357,9 +336,8 @@ def api_start(host, port):
     global local_doc_qa
 
     llm_model_ins = shared.loaderLLM()
-    llm_model_ins.set_history_len(LLM_HISTORY_LEN)
 
-    app = FastAPI()
+    app = FastAPI(title="向量知识库-Beta环境", description="`联系咚咚群`: 1026086734",)
     # Add CORS middleware to allow all origins
     # 在config.py中设置OPEN_DOMAIN=True，允许跨域
     # set OPEN_DOMAIN=True in config.py to allow cross-domain
@@ -371,18 +349,16 @@ def api_start(host, port):
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    app.websocket("/local_doc_qa/stream-chat/{knowledge_base_id}")(stream_chat)
-
     app.get("/", response_model=BaseResponse)(document)
 
-    app.post("/chat", response_model=ChatMessage)(chat)
-
-    app.post("/local_doc_qa/upload_file", response_model=BaseResponse)(upload_file)
-    app.post("/local_doc_qa/upload_files", response_model=BaseResponse)(upload_files)
-    app.post("/local_doc_qa/local_doc_chat", response_model=ChatMessage)(local_doc_chat)
-    app.post("/local_doc_qa/bing_search_chat", response_model=ChatMessage)(bing_search_chat)
-    app.get("/local_doc_qa/list_files", response_model=ListDocsResponse)(list_docs)
-    app.delete("/local_doc_qa/delete_file", response_model=BaseResponse)(delete_docs)
+    app.get("/vs/list_knowledges", response_model=ListKnowledgesResponse)(list_knowledges)
+    app.get("/vs/list_docs", response_model=ListDocsResponse)(list_docs)
+    app.post("/vs/upload_knowledge_doc", response_model=BaseResponse)(upload_doc)
+    app.post("/vs/upload_knowledge_docs", response_model=BaseResponse)(upload_docs)
+    app.delete("/vs/delete_doc", response_model=BaseResponse)(delete_docs)
+    app.post("/vs/add_one_doc", response_model=BaseResponse)(add_one_doc)
+    app.post("/vs/search_doc", response_model=ChatMessage)(search_doc)
+    app.websocket("/vs/stream-chat/{knowledge_base_id}")(stream_local_doc_chat)
 
     local_doc_qa = LocalDocQA()
     local_doc_qa.init_cfg(
@@ -396,7 +372,7 @@ def api_start(host, port):
 
 if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=7861)
+    parser.add_argument("--port", type=int, default=7866)
     # 初始化消息
     args = None
     args = parser.parse_args()
